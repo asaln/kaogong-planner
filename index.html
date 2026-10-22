@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1a237e">
+<title>考公备考计划表 · 2026.10.15 - 2027.11.27</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<div class="wrap">
+<header>
+  <h1>📚 考公备考计划表 · 2026.10.15 - 2027.11.27（国考前）</h1>
+  <p>逐任务打卡 · 进度自动更新 · 任务可自由增删改 · 多端实时同步 · 手机电脑都能用</p>
+  <div class="stats">
+    <div class="stat"><div class="n" id="stDone">0</div><div class="l">已完成天数</div></div>
+    <div class="stat"><div class="n" id="stRate">0%</div><div class="l">总完成率</div></div>
+    <div class="stat"><div class="n" id="stTask">0</div><div class="l">已完成任务项</div></div>
+    <div class="stat"><div class="n" id="stTotal">0</div><div class="l">总任务项</div></div>
+    <div class="stat"><div class="n" id="stStage">阶段一</div><div class="l">当前所处阶段</div></div>
+  </div>
+</header>
+
+<div class="toolbar no-print">
+  <span id="syncStatus" class="sync-status off">○ 检查中…</span>
+  <span class="spacer"></span>
+  <button class="ghost" onclick="openSyncConfig()">⚙ 同步设置</button>
+  <button onclick="window.print()">🖨 打印</button>
+  <button class="ghost" onclick="exportData()">⬇ 备份</button>
+  <button class="ghost" onclick="document.getElementById('importFile').click()">⬆ 恢复</button>
+  <input type="file" id="importFile" accept="application/json,.json" style="display:none;">
+  <button class="ghost" onclick="backToToday()">📍 今日</button>
+  <button class="ghost" onclick="addNewDay()">＋ 新增一天</button>
+  <button class="ghost" onclick="clearAll()">✖ 清空进度</button>
+  <button class="warn" onclick="resetAllTasks()">↺ 恢复原始任务</button>
+</div>
+
+<div class="toolbar no-print" style="margin-top:-6px;">
+  <input type="text" id="qDate" placeholder="🔍 按日期搜（如 2026-11）">
+  <select id="fStage"><option value="">全部阶段</option></select>
+  <select id="fType"><option value="">全部类型</option><option value="标准工作日">标准工作日</option><option value="值班日">值班日</option><option value="游泳日">游泳日</option><option value="周末非值班">周末非值班</option><option value="周末值班日">周末值班日</option></select>
+  <select id="fDone"><option value="">全部状态</option><option value="done">已完成</option><option value="part">进行中</option><option value="none">未完成</option></select>
+  <span style="font-size:12px;color:#666;">点击表头可排序</span>
+</div>
+
+<div class="tabs no-print">
+  <button id="tabBtn-daily" class="active" onclick="switchTab('daily')">📋 每日打卡</button>
+  <button id="tabBtn-stage" onclick="switchTab('stage')">📊 阶段进展</button>
+  <button id="tabBtn-nodes" onclick="switchTab('nodes')">🏁 关键节点</button>
+  <button id="tabBtn-weekly" onclick="switchTab('weekly')">📅 每周计划</button>
+  <button id="tabBtn-help" onclick="switchTab('help')">📖 使用说明</button>
+</div>
+
+<div class="tab-panel active" id="tab-daily">
+<section class="panel">
+  <h2>📋 每日任务打卡表（409天 · 点复选框打卡，点任务文字即可修改）</h2>
+  <div style="overflow:auto; max-height:620px; border:1px solid #e0e0e0; border-radius:8px;">
+  <table id="dayTbl">
+    <thead><tr><th data-k="date" style="min-width:92px;">日期</th><th>星期</th><th data-k="stage">阶段</th><th data-k="dtype">类型</th><th>关键节点</th><th style="min-width:300px;">任务清单（点文字修改，可换行；回车保存，Shift+回车换行）</th><th class="pct-cell" data-k="pct">完成度</th><th>用时</th><th>备注</th><th style="width:60px;">操作</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  </div>
+</section>
+</div>
+
+<div class="tab-panel" id="tab-stage">
+<section class="panel">
+  <h2>📊 四阶段进度总览</h2>
+  <div class="stage-grid" id="stageGrid"></div>
+  <div style="margin-top:16px;" id="stageBars"></div>
+</section>
+</div>
+
+<div class="tab-panel" id="tab-nodes">
+<section class="panel">
+  <h2>🏁 关键事件节点</h2>
+  <ul class="ms-list" id="msList"></ul>
+</section>
+</div>
+
+<div class="tab-panel" id="tab-weekly">
+<section class="panel">
+  <h2>📅 每周计划（58周 · 点击表头排序）</h2>
+  <div style="overflow:auto; max-height:400px;">
+  <table id="weekTbl">
+    <thead><tr><th data-k="w">周期</th><th data-k="range">日期</th><th data-k="duty">值班类型</th><th data-k="theme">本周主攻</th><th>每日要点</th><th data-k="std">验收标准</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  </div>
+</section>
+</div>
+
+<div class="tab-panel" id="tab-help">
+<section class="panel help">
+  <h2>📖 使用说明</h2>
+  <ol>
+    <li><b>打卡：</b>任务前复选框点一下即标记完成（自动划线变灰），进度条与顶部统计实时更新。</li>
+    <li><b>改任务（需求2，重点）：</b>直接点任务文字即可编辑，<b>支持换行</b>（手机上直接换一行写一条）；回车 = 保存并退出，<b>Shift + 回车</b> = 在任务里插入换行。每条右侧的 × 可删除该条。</li>
+    <li><b>增任务：</b>每天任务清单底部「＋ 新增一条任务」按钮；整天的任务可用右侧「✎」批量重写（一行一条）。</li>
+    <li><b>新增/删除某一天：</b>工具栏「＋ 新增一天」，按 YYYY-MM-DD 输入日期即可；某天右侧「🗑」删除整天。</li>
+    <li><b>保存：</b>以上所有修改<b>即时自动保存</b>。配置云端后，任何改动都会推送到云端；换手机、换电脑、换浏览器登录同一网址，打开即看到最新内容（需求1、4）。</li>
+    <li><b>筛选排序：</b>顶部按阶段/类型/完成状态筛选，搜索框按日期片段检索（如 <code>2026-11</code> 看11月），点表头排序。</li>
+    <li><b>打印：</b>点「🖨 打印」可打印当前筛选结果贴墙。</li>
+    <li><b>备份：</b>「⬇ 备份」导出 JSON，「⬆ 恢复」读回。云端同步之外的第二份保险。</li>
+    <li><b>恢复原始任务：</b>改乱时点「↺ 恢复原始任务」，一键还原任务清单（打卡进度、用时、备注均保留）。</li>
+    <li><b>部署与同步：</b>见 README.md，把仓库 Fork 到自己的 GitHub、开启 Pages 与 Actions 后，填一个同步令牌即可实现多端互通。</li>
+  </ol>
+</section>
+</div>
+</div>
+
+<!-- 同步设置弹窗 -->
+<div id="syncMask"></div>
+<div id="syncBox">
+  <h3>⚙ 多端同步设置</h3>
+  <p>开启后，你在任意手机/电脑/浏览器上的打卡与任务修改都会实时上传云端，别处打开自动同步。<br>
+     这个令牌是一个你自己定的字符串（建议 20 位以上随机字符），<b>只用于区分你是不是合法访问者</b>，和 GitHub 账号密码无关。</p>
+  <label style="font-size:12px;color:#666;">仓库地址（你的用户名/仓库名）</label>
+  <input type="text" id="apiRepo" placeholder="如：zhangsan/kaogong" autocomplete="off">
+  <label style="font-size:12px;color:#666;">同步令牌（API Token）</label>
+  <input type="text" id="apiToken" placeholder="与仓库 Secrets 里的 API_TOKEN 保持一致" autocomplete="off">
+  <p style="font-size:11.5px;color:#999;">未开启同步时，所有数据仅保存在当前浏览器本地，换设备不会自动共享。</p>
+  <p style="font-size:11.5px;color:#999;">两栏都留空 = 仅本机保存。填了之后，手机/电脑/其他浏览器登录同一网址即可共享打卡进度。</p>
+  <div class="row">
+    <span class="st" id="syncTestSt"></span>
+    <button class="cbtn cancel" onclick="closeSyncConfig()">取消</button>
+    <button class="cbtn ok" onclick="saveSyncConfig()">保存并同步</button>
+  </div>
+</div>
+
+<!-- 确认弹窗 -->
+<div id="confirmMask"></div>
+<div id="confirmBox">
+  <div class="ctitle" id="confirmTitle">确认操作</div>
+  <div class="cbody" id="confirmBody"></div>
+  <div class="cfoot">
+    <button class="cbtn ok" id="confirmOk">确认</button>
+    <button class="cbtn cancel" id="confirmCancel">取消</button>
+  </div>
+</div>
+
+<!-- 手机端底部操作条 -->
+<div class="mobile-bar no-print">
+  <button onclick="switchTab('daily')">📋 打卡</button>
+  <button onclick="backToToday()">📍 今日</button>
+  <button onclick="addNewDay()">＋ 新增</button>
+  <button onclick="switchTab('stage')">📊 阶段</button>
+  <button onclick="openSyncConfig()">⚙ 同步</button>
+</div>
+
+<div id="tip"></div>
+
+<script src="./data.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>
