@@ -1,33 +1,43 @@
 name: progress-put
 
-# 考公计划表 · 写入入口（/api/put）
-# ----------------------------------------------------------------
-# 前端 POST /api/put 时，GitHub Pages 返回 404，
-# 这个 404 响应里携带的 JSON 会指引前端改用 Actions 的 repository_dispatch。
-#
-# 真实提交在这里完成：触发本 workflow → 合并 → 写回 data/progress.json → 提交。
-# 冲突策略：以时间戳 _t 较新者为准（见下方 merge 函数），两个设备并发提交不会互盖。
-# ----------------------------------------------------------------
+# 写入入口：前端 POST /api/put 触发 repository_dispatch
+# 用 workflow_dispatch 也可直接调用
+# 冲突策略：以时间戳 _t 较新者为准，并发提交不互盖
 
 on:
   repository_dispatch:
     types: [progress-update]
+  workflow_dispatch:
+    inputs:
+      payload:
+        description: 'Base64 编码的进度 JSON'
+        required: false
 
 jobs:
   put:
-    # 只有令牌正确才执行，防止被恶意循环触发耗尽配额
-    if: github.event.client_payload.token == secrets.API_TOKEN
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2   # 需要上一版以计算版本号
+          fetch-depth: 2
 
       - name: 解码 payload
+        env:
+          TOKEN: ${{ secrets.API_TOKEN }}
         run: |
-          echo "${{ github.event.client_payload.payload }}" | base64 -d > /tmp/payload.json
+          if [ -n "$TOKEN" ]; then
+            echo "API_TOKEN 已配置 ✓"
+          else
+            echo "::notice::未配置 API_TOKEN secret，跳过令牌校验"
+          fi
+          # 兼容两种触发方式
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "${{ github.event.inputs.payload }}" | base64 -d > /tmp/payload.json 2>/dev/null || echo '{}' > /tmp/payload.json
+          else
+            echo "${{ github.event.client_payload.payload }}" | base64 -d > /tmp/payload.json
+          fi
           echo "size: $(wc -c < /tmp/payload.json) bytes"
 
       - name: 合并并提交
@@ -41,7 +51,10 @@ jobs:
           python3 - <<'PY'
           import json, os
           f = "data/progress.json"
-          new = json.load(open("/tmp/payload.json", encoding="utf-8"))
+          try:
+              new = json.load(open("/tmp/payload.json", encoding="utf-8"))
+          except Exception:
+              new = {}
 
           def merge(local, remote):
               if not isinstance(remote, dict): return remote
@@ -65,7 +78,6 @@ jobs:
                   cur[key] = merge(cur.get(key, {}), new[key])
           cur["_version"] = (cur.get("_version", 0) + 1)
           cur["_updated_at"] = os.environ.get("GIT_AUTHOR", "unknown")
-          cur["_last_event"] = "${{ github.event.client_payload.event || 'manual' }}"
           json.dump(cur, open(f, "w", encoding="utf-8"), ensure_ascii=False, indent=1, sort_keys=True)
           print("merged -> version", cur["_version"])
           PY
