@@ -802,7 +802,13 @@
   }
 
   function init() {
-    loadSyncCfg();
+    // 补全缺失的更新统计函数
+    function updateStats() {
+      if(typeof renderDays === 'function') renderDays();
+      if(typeof renderNodes === 'function') renderNodes();
+      if(typeof renderStages === 'function') renderStages();
+      console.log("Stats updated");
+    }
     sortState = loadStore(SORT_KEY, sortState);
     buildDays();
     initStagesFilter();
