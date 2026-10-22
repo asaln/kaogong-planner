@@ -1,1 +1,66 @@
+name: deploy-pages
 
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+# 允许此 workflow 部署到 GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 确保 data/progress.json 存在
+        run: |
+          mkdir -p data
+          if [ ! -f data/progress.json ]; then
+            echo '{"_version":0,"checks":{},"notes":{},"edits":{},"_updated_at":"init"}' > data/progress.json
+            echo "created empty progress.json"
+          fi
+
+      - name: 注入 API_REPO
+        run: |
+          REPO="${{ github.repository }}"
+          # 替换 app.js 里占位用的 API_REPO（仅当文件里还留着占位值时替换）
+          python3 - <<PY
+          import os, json
+          p = "app.js"
+          s = open(p, encoding="utf-8").read()
+          # 不做硬编码注入，改为留空由用户在 ⚙ 同步设置 里填
+          print("repo =", os.environ.get("REPO"))
+          PY
+
+      - name: 打包站点产物
+        run: |
+          mkdir -p _site
+          cp index.html style.css data.js app.js README.md _site/
+          cp data/progress.json _site/data/progress.json
+          # 404 兜底页：让 /data/progress.json 之外的深层路径也能落到 index.html
+          cp index.html _site/404.html
+          ls -la _site
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

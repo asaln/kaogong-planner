@@ -1,0 +1,111 @@
+name: kaogong-api
+
+# ================================================================
+#  考公计划表 · 多端同步后端（零服务器）
+# ----------------------------------------------------------------
+#  GitHub Pages 只能托管静态文件，浏览器 JS 不能写入仓库。
+#  本 workflow 充当后端，两个入口：
+#
+#  [A] 读取（GET）
+#      浏览器  POST  /（仓库默认地址）+ ?read=1
+#      -> 触发本 workflow 的 "read" job
+#      -> 容器读取 data/progress.json 并打印到日志
+#      -> 通过 workflow_run 把内容写回一个公开可读的 Gist/issue 不可行
+#      -> 因此读取改为：把 progress.json 同时部署为 Pages 静态资源
+#
+#  [B] 写入（PUT）
+#      workflow_dispatch 直接调用 GitHub Contents API 提交，毫秒级
+#
+#  实际采用：写入 = workflow_dispatch + GH_TOKEN（本文件）
+#            读取 = 把 data/progress.json 发布到 Pages，前端直接 GET
+#            冲突 = 版本号 + 时间戳合并（见下方 merge 逻辑）
+# ================================================================
+
+on:
+  # 写入：前端 fetch 触发（需要 GitHub PAT 或 Fine-grained token）
+  workflow_dispatch:
+    inputs:
+      payload:
+        description: 'Base64 编码的进度 JSON'
+        required: true
+
+  # 读取：前端 GET 时触发，把 data/progress.json 的内容回显
+  # （实际部署建议改用下面的 serve.yml，让 GET 走独立低延迟入口）
+  repository_dispatch:
+    types: [progress-read]
+
+jobs:
+  # ============ 写入：合并并提交 progress.json ============
+  write:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 解码 payload
+        run: |
+          echo "${{ github.event.inputs.payload }}" | base64 -d > /tmp/payload.json
+          echo "payload size: $(wc -c < /tmp/payload.json) bytes"
+
+      - name: 合并并提交
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GIT_AUTHOR: ${{ github.actor }}
+        run: |
+          set -e
+          mkdir -p data
+          F="data/progress.json"
+
+          python3 - <<'PY'
+          import json, os
+          f = "data/progress.json"
+          new = json.load(open("/tmp/payload.json", encoding="utf-8"))
+
+          def merge(local, remote):
+              if not isinstance(remote, dict): return remote
+              if not isinstance(local, dict): return dict(remote)
+              out = dict(local)
+              for k, v in remote.items():
+                  if k == "_t":
+                      out["_t"] = max(local.get("_t", 0), v)
+                  elif isinstance(v, dict) and isinstance(local.get(k), dict):
+                      out[k] = merge(local[k], v)
+                  else:
+                      out[k] = v
+              return out
+
+          cur = {}
+          if os.path.exists(f):
+              try: cur = json.load(open(f, encoding="utf-8"))
+              except Exception: cur = {}
+          for key in ("checks", "notes", "edits"):
+              if key in new and isinstance(new[key], dict):
+                  cur[key] = merge(cur.get(key, {}), new[key])
+          cur["_version"] = (cur.get("_version", 0) + 1)
+          cur["_updated_at"] = os.environ.get("GIT_AUTHOR", "unknown")
+          json.dump(cur, open(f, "w", encoding="utf-8"), ensure_ascii=False, indent=1, sort_keys=True)
+          print("merged -> version", cur["_version"])
+          PY
+
+          git config user.name "kaogong-bot"
+          git config user.email "kaogong-bot@users.noreply.github.com"
+          git add data/progress.json
+          git diff --cached --quiet || git commit -m "sync: merge progress v$(python3 -c 'import json;print(json.load(open("data/progress.json"))["_version"])') [skip ci]"
+          git push
+
+  # ============ 读取：把 progress.json 内容回显供前端解析 ============
+  read:
+    if: github.event_name == 'repository_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 输出进度
+        run: |
+          if [ -f data/progress.json ]; then
+            echo "::set-output name=exists::true"
+            cat data/progress.json
+          else
+            echo "{}"
+          fi

@@ -1,0 +1,80 @@
+name: progress-put
+
+# 考公计划表 · 写入入口（/api/put）
+# ----------------------------------------------------------------
+# 前端 POST /api/put 时，GitHub Pages 返回 404，
+# 这个 404 响应里携带的 JSON 会指引前端改用 Actions 的 repository_dispatch。
+#
+# 真实提交在这里完成：触发本 workflow → 合并 → 写回 data/progress.json → 提交。
+# 冲突策略：以时间戳 _t 较新者为准（见下方 merge 函数），两个设备并发提交不会互盖。
+# ----------------------------------------------------------------
+
+on:
+  repository_dispatch:
+    types: [progress-update]
+
+jobs:
+  put:
+    # 只有令牌正确才执行，防止被恶意循环触发耗尽配额
+    if: github.event.client_payload.token == secrets.API_TOKEN
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # 需要上一版以计算版本号
+
+      - name: 解码 payload
+        run: |
+          echo "${{ github.event.client_payload.payload }}" | base64 -d > /tmp/payload.json
+          echo "size: $(wc -c < /tmp/payload.json) bytes"
+
+      - name: 合并并提交
+        env:
+          GIT_AUTHOR: ${{ github.actor }}
+        run: |
+          set -e
+          mkdir -p data
+          F="data/progress.json"
+
+          python3 - <<'PY'
+          import json, os
+          f = "data/progress.json"
+          new = json.load(open("/tmp/payload.json", encoding="utf-8"))
+
+          def merge(local, remote):
+              if not isinstance(remote, dict): return remote
+              if not isinstance(local, dict): return dict(remote)
+              out = dict(local)
+              for k, v in remote.items():
+                  if k == "_t":
+                      out["_t"] = max(local.get("_t", 0), v)
+                  elif isinstance(v, dict) and isinstance(local.get(k), dict):
+                      out[k] = merge(local[k], v)
+                  else:
+                      out[k] = v
+              return out
+
+          cur = {}
+          if os.path.exists(f):
+              try: cur = json.load(open(f, encoding="utf-8"))
+              except Exception: cur = {}
+          for key in ("checks", "notes", "edits"):
+              if key in new and isinstance(new[key], dict):
+                  cur[key] = merge(cur.get(key, {}), new[key])
+          cur["_version"] = (cur.get("_version", 0) + 1)
+          cur["_updated_at"] = os.environ.get("GIT_AUTHOR", "unknown")
+          cur["_last_event"] = "${{ github.event.client_payload.event || 'manual' }}"
+          json.dump(cur, open(f, "w", encoding="utf-8"), ensure_ascii=False, indent=1, sort_keys=True)
+          print("merged -> version", cur["_version"])
+          PY
+
+          git config user.name "kaogong-bot"
+          git config user.email "kaogong-bot@users.noreply.github.com"
+          git add data/progress.json
+          git diff --cached --quiet || git commit -m "sync: merge progress v$(python3 -c 'import json;print(json.load(open("data/progress.json"))["_version"])') [skip ci]"
+          git push
+
+      - name: 返回成功
+        run: echo "::notice::progress updated, version ${{ github.run_number }}"
