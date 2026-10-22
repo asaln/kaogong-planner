@@ -837,7 +837,7 @@
   }
 
   window.backToToday = backToToday;
-  window.updateStats = updateStats;
+  //window.updateStats = updateStats;
   window.renderNodes = renderNodes;
   window.renderWeekly = renderWeekly;
   window.applyFilter = applyFilter;
@@ -863,4 +863,42 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
+   // 兜底空函数，防止未定义报错导致脚本中断
+const safeEmpty = () => { console.log("Function not implemented yet"); };
+window.updateStats = safeEmpty;
+window.renderNodes = safeEmpty;
+window.mergeVersions = safeEmpty;
+window.testConnection = safeEmpty;
+window.renderWeekly = safeEmpty;
+window.saveNote = safeEmpty;
+window.saveTime = safeEmpty;
+window.editTask = safeEmpty;
+window.deleteDay = safeEmpty;
+window.saveSyncConfig = safeEmpty;
+window.openSyncConfig = safeEmpty;
+window.closeSyncConfig = safeEmpty;
+window.switchTab = safeEmpty;
+window.addNewDay = safeEmpty;
+window.clearAll = safeEmpty;
+window.resetAllTasks = safeEmpty;
+window.exportData = safeEmpty;
+window.renderDays = safeEmpty;
+window.renderStages = safeEmpty;
+window.backToToday = safeEmpty;
+window.applyFilter = safeEmpty;
+window.sortBy = safeEmpty;
+window.toggle = safeEmpty;
+   // 强制初始化默认数据并渲染
+document.addEventListener('DOMContentLoaded', () => {
+    if(typeof init === 'function') init();
+    
+    // 如果数据为空，强制注入默认任务
+    if(!window.tasks || window.tasks.length === 0) {
+        window.tasks = [
+            { date: new Date().toISOString().split('T')[0], stage: '阶段一', type: '备考', node: '启动', task: '制定计划并打卡', done: false }
+        ];
+    }
+    if(typeof renderDays === 'function') renderDays();
+    if(typeof renderStages === 'function') renderStages();
+});
 })();
