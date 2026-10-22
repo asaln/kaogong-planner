@@ -73,7 +73,10 @@
      优先级：editStore 里存在该日期 → 用它；否则用原始 items。 */
   function resolveItems(day) {
     if (editStore[day.date]) return editStore[day.date];
-    return day.items;
+    if (day.items) return day.items;
+    // 兜底：传入的是临时对象（如 {date:'xxx'}），从 dayMap 取原始数据
+    var orig = dayMap[day.date];
+    return (orig && orig.items) || [];
   }
   function buildDays() {
     dayMap = {};
@@ -465,7 +468,7 @@
     });
   }
 
-  window.switchTab = function (name) {
+  function switchTab(name) {
     currentTab = name;
     document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
     document.querySelectorAll('.tabs button').forEach(function (b) { b.classList.remove('active'); });
@@ -474,7 +477,7 @@
     var btn = document.getElementById('tabBtn-' + name);
     if (btn) btn.classList.add('active');
     if (name === 'weekly') renderWeekly();
-  };
+  }
 
   function backToToday() {
     filterState = { q: '', stage: '', type: '', done: '' };
@@ -684,7 +687,7 @@
   }
 
   /* ---------- 同步设置弹窗 ---------- */
-  window.openSyncConfig = function () {
+  function openSyncConfig() {
     var box = document.getElementById('syncBox');
     var mask = document.getElementById('syncMask');
     if (box) box.style.display = 'block';
@@ -693,14 +696,14 @@
     var irep = document.getElementById('apiRepo');
     if (inp && syncCfg) inp.value = syncCfg.token || '';
     if (irep && syncCfg) irep.value = syncCfg.repo || '';
-  };
-  window.closeSyncConfig = function () {
+  }
+  function closeSyncConfig() {
     var box = document.getElementById('syncBox');
     var mask = document.getElementById('syncMask');
     if (box) box.style.display = 'none';
     if (mask) mask.style.display = 'none';
-  };
-  window.saveSyncConfig = function () {
+  }
+  function saveSyncConfig() {
     var rep = document.getElementById('apiRepo');
     var tok = document.getElementById('apiToken');
     var r = rep ? rep.value.trim() : '';
@@ -713,19 +716,19 @@
     toast('配置已保存，正在同步…');
     closeSyncConfig();
     pull().then(function () { push(); });
-  };
-  window.testConnection = function () {
+  }
+  function testConnection() {
     if (!isConfigured()) { toast('请先填写并保存令牌', true); return; }
     toast('正在连接…');
     pull().then(function (r) {
       if (r) toast('连接成功！云端共有 ' + Object.keys(r.checks || {}).length + ' 天的进度记录');
     });
-  };
+  }
 
   /* ============================================================
      导入 / 导出（本地 JSON 备份，作为云端之外的第二份保险）
      ============================================================ */
-  window.exportData = function () {
+  function exportData() {
     var blob = {
       exportedAt: new Date().toISOString(),
       planVersion: (DATA.stages[0] && DATA.stages[0].start) || '2026.10.15',
