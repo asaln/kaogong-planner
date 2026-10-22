@@ -484,8 +484,20 @@
     syncFilters(); renderDays();
     var t = todayStr();
     var el = document.querySelector('#dayTbl tr[data-date="' + t + '"]');
-    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    else document.querySelector('#dayTbl').scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (el) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      el.classList.add('today-focus');
+      setTimeout(function () { el.classList.remove('today-focus'); }, 2600);
+    } else {
+      var tbl = document.querySelector('#dayTbl');
+      if (tbl) tbl.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  }
+
+  // 网页打开时自动定位到今天的打卡行（仅在没有主动筛选/搜索时执行）
+  function autoFocusToday() {
+    if (filterState.q || filterState.stage || filterState.type || filterState.done) return;
+    backToToday();
   }
 
   /* ============================================================
@@ -831,6 +843,13 @@
     }
 
     window.addEventListener('online', function () { if (isConfigured()) pull(); });
+
+    // 打开网页自动定位到当天任务（本地与云端数据就绪后再定位）
+    if (isConfigured()) {
+      pull().then(function () { autoFocusToday(); });
+    } else {
+      autoFocusToday();
+    }
   }
 
   // 仅挂载真实存在的函数，避免 ReferenceError 导致 init() 无法执行
